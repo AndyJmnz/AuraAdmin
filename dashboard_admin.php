@@ -7,7 +7,6 @@ if (!isset($_SESSION['user_id']) || !isset($_SESSION['role_id']) || $_SESSION['r
     exit;
 }
 
-// Configuración de la base de datos
 $host = 'localhost';
 $dbname = 'aura';
 $username = 'root';
@@ -20,17 +19,13 @@ try {
     die("Error de conexión: " . $e->getMessage());
 }
 
-// Consultas para obtener estadísticas
 function getStats($pdo) {
-    // Total de usuarios (excluyendo eliminados)
     $stmt = $pdo->query("SELECT COUNT(*) as total_usuarios FROM users WHERE deleted = 0");
     $total_usuarios = $stmt->fetch()['total_usuarios'];
     
-    // Total de roles
     $stmt = $pdo->query("SELECT COUNT(*) as total_roles FROM roles");
     $total_roles = $stmt->fetch()['total_roles'];
     
-    // Total de suscripciones activas
     try {
         $stmt = $pdo->query("SELECT COUNT(*) as suscripciones FROM users WHERE subscription_status = 'active' AND deleted = 0");
         $suscripciones = $stmt->fetch()['suscripciones'];
@@ -38,7 +33,6 @@ function getStats($pdo) {
         $suscripciones = 0; // Si no existe la columna, mostrar 0
     }
     
-    // Usuarios registrados por mes (últimos 6 meses)
     try {
         $stmt = $pdo->query("
             SELECT 
@@ -55,7 +49,6 @@ function getStats($pdo) {
         $usuarios_por_mes = []; // Si hay error, array vacío
     }
     
-    // Distribución por roles
     try {
         $stmt = $pdo->query("
             SELECT 
@@ -68,7 +61,7 @@ function getStats($pdo) {
         ");
         $usuarios_por_rol = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } catch (Exception $e) {
-        $usuarios_por_rol = []; // Si hay error, array vacío
+        $usuarios_por_rol = []; 
     }
     
     return [
@@ -82,7 +75,6 @@ function getStats($pdo) {
 
 $stats = getStats($pdo);
 
-// Manejo de logout
 if (isset($_GET['logout'])) {
     session_destroy();
     header('Location: login.php');
@@ -96,6 +88,7 @@ if (isset($_GET['logout'])) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard Administrativo - Aura</title>
+    <link rel="icon" type="image/png" href="img/logo.png">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
     <style>
         * {
@@ -429,7 +422,7 @@ if (isset($_GET['logout'])) {
                         'rgba(16, 185, 129, 0.8)',
                         'rgba(59, 130, 246, 0.8)',
                         'rgba(245, 158, 11, 0.8)',
-                        'rgba(239, 68, 68, 0.8)'
+                        '#ef4444cc'
                     ],
                     borderWidth: 2,
                     borderColor: 'white'

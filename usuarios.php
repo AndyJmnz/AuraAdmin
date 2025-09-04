@@ -27,18 +27,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->beginTransaction();
                 
                 // Insertar en tabla users
-                $stmt = $pdo->prepare("INSERT INTO users (name, email, email_verified_at, password, created_at, updated_at) VALUES (?, ?, NOW(), ?, NOW(), NOW())");
+                $stmt = $pdo->prepare("INSERT INTO users (name, lastname, email, subscription_status, subscription_type, subscription_start, created_at) VALUES (?, ?, ?, ?, ?, NOW(), NOW())");
                 $stmt->execute([
                     $_POST['name'],
+                    $_POST['lastname'],
                     $_POST['email'],
-                    password_hash($_POST['password'], PASSWORD_DEFAULT)
+                    $_POST['subscription_status'] ?? 'inactive',
+                    $_POST['subscription_type'] ?? 'free'
                 ]);
                 
                 $user_id = $pdo->lastInsertId();
                 
                 // Insertar en user_accounts si se seleccionó un rol
                 if (!empty($_POST['role_id'])) {
-                    $stmt = $pdo->prepare("INSERT INTO user_accounts (user_id, role_id, created_at, updated_at) VALUES (?, ?, NOW(), NOW())");
+                    $stmt = $pdo->prepare("INSERT INTO user_accounts (user_id, role_id) VALUES (?, ?)");
                     $stmt->execute([$user_id, $_POST['role_id']]);
                 }
                 
@@ -55,35 +57,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->beginTransaction();
                 
                 // Actualizar tabla users
-                if (!empty($_POST['password'])) {
-                    $stmt = $pdo->prepare("UPDATE users SET name=?, email=?, password=?, updated_at=NOW() WHERE id=?");
-                    $stmt->execute([
-                        $_POST['name'],
-                        $_POST['email'],
-                        password_hash($_POST['password'], PASSWORD_DEFAULT),
-                        $_POST['id']
-                    ]);
-                } else {
-                    $stmt = $pdo->prepare("UPDATE users SET name=?, email=?, updated_at=NOW() WHERE id=?");
-                    $stmt->execute([
-                        $_POST['name'],
-                        $_POST['email'],
-                        $_POST['id']
-                    ]);
-                }
+                $stmt = $pdo->prepare("UPDATE users SET name=?, lastname=?, email=?, subscription_status=?, subscription_type=? WHERE id=?");
+                $stmt->execute([
+                    $_POST['name'],
+                    $_POST['lastname'],
+                    $_POST['email'],
+                    $_POST['subscription_status'],
+                    $_POST['subscription_type'],
+                    $_POST['id']
+                ]);
                 
                 // Actualizar o insertar rol en user_accounts
                 if (!empty($_POST['role_id'])) {
-                    $stmt = $pdo->prepare("SELECT id FROM user_accounts WHERE user_id=?");
-                    $stmt->execute([$_POST['id']]);
-                    
-                    if ($stmt->fetch()) {
-                        $stmt = $pdo->prepare("UPDATE user_accounts SET role_id=?, updated_at=NOW() WHERE user_id=?");
-                        $stmt->execute([$_POST['role_id'], $_POST['id']]);
-                    } else {
-                        $stmt = $pdo->prepare("INSERT INTO user_accounts (user_id, role_id, created_at, updated_at) VALUES (?, ?, NOW(), NOW())");
-                        $stmt->execute([$_POST['id'], $_POST['role_id']]);
-                    }
+                    $stmt = $pdo->prepare("REPLACE INTO user_accounts (user_id, role_id) VALUES (?, ?)");
+                    $stmt->execute([$_POST['id'], $_POST['role_id']]);
                 }
                 
                 $pdo->commit();
@@ -116,19 +103,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Obtener todos los usuarios con sus roles
+// Obtener todos los usuarios con sus roles (consulta corregida)
 $stmt = $pdo->query("
     SELECT 
         u.id, 
-        u.name, 
+        u.name,
+        u.lastname, 
         u.email, 
-        u.email_verified_at, 
+        u.role_id,
+        u.subscription_status,
+        u.subscription_type,
+        u.subscription_start,
         u.created_at,
-        r.name as rol_nombre,
-        ua.role_id
+        r.name as rol_nombre
     FROM users u
-    LEFT JOIN user_accounts ua ON u.id = ua.user_id
-    LEFT JOIN roles r ON ua.role_id = r.id
+    LEFT JOIN roles r ON u.role_id = r.id
     ORDER BY u.created_at DESC
 ");
 $usuarios = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -144,8 +133,11 @@ if (isset($_GET['editar'])) {
         SELECT 
             u.id, 
             u.name, 
+            u.lastname,
             u.email, 
-            ua.role_id
+            u.subscription_status,
+            u.subscription_type, 
+            u.role_id
         FROM users u
         LEFT JOIN user_accounts ua ON u.id = ua.user_id
         WHERE u.id=?
@@ -161,6 +153,7 @@ if (isset($_GET['editar'])) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gestión de Usuarios - Aura</title>
+    <link rel="icon" type="image/png" href="img/logo.png">
     <style>
         * {
             margin: 0;
@@ -170,7 +163,7 @@ if (isset($_GET['editar'])) {
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #E6E2D2 0%, #E6E2D2 100%);
             min-height: 100vh;
             display: flex;
         }
@@ -188,17 +181,14 @@ if (isset($_GET['editar'])) {
         .logo {
             display: flex;
             align-items: center;
+            padding-left: 2rem;
             margin-bottom: 3rem;
-            font-size: 2rem;
-            font-weight: bold;
         }
 
-        .logo-icon {
-            background: rgba(255,255,255,0.2);
-            border-radius: 12px;
-            padding: 10px;
-            margin-right: 15px;
-            font-size: 1.5rem;
+        .logo-img {
+             width: 150px; /* Adjust this value based on your logo size */
+            height: auto;
+            object-fit: contain;
         }
 
         .nav-item {
@@ -247,8 +237,9 @@ if (isset($_GET['editar'])) {
 
         .main-content {
             margin-left: 280px;
-            padding: 2rem;
-            flex: 1;
+            padding: 1.5rem;
+            width: calc(100% - 280px);
+            overflow-x: hidden;
         }
 
         .header {
@@ -423,6 +414,54 @@ if (isset($_GET['editar'])) {
             border-left-color: #dc2626;
         }
 
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+            padding: 0 1rem;
+            width: 100%;
+            max-width: 100%;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+            padding: 1.5rem;
+            border-radius: 20px;
+            color: white;
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            transform: translateY(0);
+            transition: all 0.3s ease;
+            min-width: 0; /* Previene desbordamiento */
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.15);
+        }
+
+        .stat-card:nth-child(2) {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        }
+
+        .stat-card:nth-child(3) {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        }
+         .stat-card:nth-child(4) {
+            background: linear-gradient(135deg, #ef4444cc 0%, #ef4444cc 100%);
+        }
+
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            font-size: 1rem;
+            opacity: 0.9;
+        }
         @media (max-width: 768px) {
             .sidebar {
                 width: 80px;
@@ -454,22 +493,215 @@ if (isset($_GET['editar'])) {
 <body>
     <div class="sidebar">
         <div class="logo">
-            <div class="logo-icon">Au</div>
-            <span>ra</span>
+            <img src="img/logo.png" alt="Aura Logo" class="logo-img">
         </div>
         
         <nav>
-            <a href="index.php" class="nav-item">
-                <span class="nav-icon">📊</span>
+            <a href="dashboard_admin.php" class="nav-item">
                 <span>Estadísticas</span>
             </a>
             <a href="usuarios.php" class="nav-item active">
-                <span class="nav-icon">👥</span>
                 <span>Usuarios</span>
             </a>
-            <a href="roles.php" class="nav-item">
-                <span class="nav-icon">🔐</span>
-                <span>Roles</span>
-            </a>
+        
             <a href="suscripciones.php" class="nav-item">
-                <span class="nav-icon">💎</span>
+                <span>Suscripciones</span>
+            </a>
+        </nav>
+        
+        <button class="logout-btn" onclick="location.href='?logout=1'">
+            Cerrar Sesión
+        </button>
+    </div>
+
+
+    <div class="main-content">
+        <div class="header">
+            <h1>Gestión de Usuarios</h1>
+            <p>Administra todos los usuarios del sistema Aura</p>
+        </div>
+
+        <!-- Estadísticas -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value"><?php echo count($usuarios); ?></div>
+                <div class="stat-label">Total Usuarios</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value"><?php echo count(array_filter($usuarios, function($u) { return !empty($u['rol_nombre']); })); ?></div>
+                <div class="stat-label">Con Roles Asignados</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value"><?php echo count(array_filter($usuarios, function($u) { return $u['rol_nombre'] === 'admin'; })); ?></div>
+                <div class="stat-label">Administradores</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value"><?php echo count($roles); ?></div>
+                <div class="stat-label">Roles Disponibles</div>
+            </div>
+        </div>
+
+        <?php if ($mensaje): ?>
+            <div class="mensaje <?php echo strpos($mensaje, 'Error') !== false ? 'error' : ''; ?>">
+                <?php echo htmlspecialchars($mensaje); ?>
+            </div>
+        <?php endif; ?>
+
+        <!-- Formulario -->
+        <div class="content-card">
+            <h2><?php echo $usuario_editar ? 'Editar Usuario' : 'Crear Nuevo Usuario'; ?></h2>
+            
+            <form method="POST" action="">
+                <input type="hidden" name="accion" value="<?php echo $usuario_editar ? 'editar' : 'crear'; ?>">
+                <?php if ($usuario_editar): ?>
+                    <input type="hidden" name="id" value="<?php echo $usuario_editar['id']; ?>">
+                <?php endif; ?>
+                
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="name">Nombre</label>
+                        <input type="text" id="name" name="name" required 
+                               value="<?php echo $usuario_editar ? htmlspecialchars($usuario_editar['name']) : ''; ?>">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="lastname">Apellido</label>
+                        <input type="text" id="lastname" name="lastname" required
+                               value="<?php echo $usuario_editar ? htmlspecialchars($usuario_editar['lastname']) : ''; ?>">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="email">Email</label>
+                        <input type="email" id="email" name="email" required
+                               value="<?php echo $usuario_editar ? htmlspecialchars($usuario_editar['email']) : ''; ?>">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="subscription_status">Estado de Suscripción</label>
+                        <select id="subscription_status" name="subscription_status">
+                            <option value="active" <?php echo ($usuario_editar && $usuario_editar['subscription_status'] == 'active') ? 'selected' : ''; ?>>Activa</option>
+                            <option value="inactive" <?php echo ($usuario_editar && $usuario_editar['subscription_status'] == 'inactive') ? 'selected' : ''; ?>>Inactiva</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="subscription_type">Tipo de Suscripción</label>
+                        <select id="subscription_type" name="subscription_type">
+                            <option value="free" <?php echo ($usuario_editar && $usuario_editar['subscription_type'] == 'free') ? 'selected' : ''; ?>>Gratuita</option>
+                            <option value="premium" <?php echo ($usuario_editar && $usuario_editar['subscription_type'] == 'premium') ? 'selected' : ''; ?>>Premium</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="role_id">Rol</label>
+                        <select id="role_id" name="role_id">
+                            <option value="">Sin rol asignado</option>
+                            <?php foreach ($roles as $rol): ?>
+                                <option value="<?php echo $rol['id']; ?>" 
+                                        <?php echo ($usuario_editar && $usuario_editar['role_id'] == $rol['id']) ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars($rol['name']); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 1rem;">
+                    <button type="submit" class="btn btn-primary">
+                        <?php echo $usuario_editar ? 'Actualizar Usuario' : 'Crear Usuario'; ?>
+                    </button>
+                    
+                    <?php if ($usuario_editar): ?>
+                        <a href="usuarios.php" class="btn btn-secondary">Cancelar</a>
+                    <?php endif; ?>
+                </div>
+            </form>
+        </div>
+
+        <!-- Tabla de usuarios -->
+        <div class="content-card">
+            <h2>Lista de Usuarios</h2>
+            
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nombre</th>
+                            <th>Apellido</th>
+                            <th>Email</th>
+                            <th>Rol</th>
+                            <th>Estado Suscripción</th>
+                            <th>Tipo Suscripción</th>
+                            <th>Fecha Creación</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($usuarios as $usuario): ?>
+                            <tr>
+                                <td><?php echo htmlspecialchars($usuario['id']); ?></td>
+                                <td><?php echo htmlspecialchars($usuario['name']); ?></td>
+                                <td><?php echo htmlspecialchars($usuario['lastname']); ?></td>
+                                <td><?php echo htmlspecialchars($usuario['email']); ?></td>
+                                <td>
+                                    <?php if ($usuario['rol_nombre']): ?>
+                                        <span class="badge badge-info">
+                                            <?php echo htmlspecialchars($usuario['rol_nombre']); ?>
+                                        </span>
+                                    <?php else: ?>
+                                        <span class="badge badge-warning">Sin rol</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <?php echo $usuario['subscription_status'] === 'active' ? '✔️ Activa' : '❌ Inactiva'; ?>
+                                </td>
+                                <td>
+                                    <?php echo $usuario['subscription_type'] === 'free' ? 'Gratuita' : 'Pagada'; ?>
+                                </td>
+                                <td><?php echo date('d/m/Y H:i', strtotime($usuario['created_at'])); ?></td>
+                                
+                                <td>
+                                    <div class="actions">
+                                        <a href="usuarios.php?editar=<?php echo $usuario['id']; ?>" 
+                                           class="btn btn-secondary btn-small">
+                                            Editar
+                                        </a>
+                                        
+                                        <form method="POST" action="" style="display: inline;">
+                                            <input type="hidden" name="accion" value="eliminar">
+                                            <input type="hidden" name="id" value="<?php echo $usuario['id']; ?>">
+                                            <button type="submit" class="btn btn-danger btn-small"
+                                                    onclick="return confirm('¿Estás seguro de eliminar este usuario?')">
+                                                Eliminar
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+                
+                <?php if (empty($usuarios)): ?>
+                    <div style="text-align: center; padding: 2rem; color: #6b7280;">
+                        No hay usuarios registrados aún.
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Auto-hide messages after 5 seconds
+        setTimeout(function() {
+            const mensaje = document.querySelector('.mensaje');
+            if (mensaje) {
+                mensaje.style.opacity = '0';
+                mensaje.style.transition = 'opacity 0.5s ease';
+                setTimeout(() => mensaje.remove(), 500);
+            }
+        }, 5000);
+    </script>
+</body>
+</html>
