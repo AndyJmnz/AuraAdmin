@@ -27,10 +27,18 @@ function getStats($pdo) {
     $total_roles = $stmt->fetch()['total_roles'];
     
     try {
-        $stmt = $pdo->query("SELECT COUNT(*) as suscripciones FROM users WHERE subscription_status = 'active' AND deleted = 0");
+        // Contar suscripciones activas desde la tabla subscriptions
+        $stmt = $pdo->query("
+            SELECT COUNT(*) as suscripciones 
+            FROM subscriptions s
+            INNER JOIN users u ON s.user_id = u.id 
+            WHERE s.status = 'completed' 
+            AND s.end_time > NOW() 
+            AND u.deleted = 0
+        ");
         $suscripciones = $stmt->fetch()['suscripciones'];
     } catch (Exception $e) {
-        $suscripciones = 0; // Si no existe la columna, mostrar 0
+        $suscripciones = 0; // Si hay error, mostrar 0
     }
     
     try {
@@ -122,7 +130,7 @@ if (isset($_GET['logout'])) {
         }
 
         .logo-img {
-             width: 150px; /* Adjust this value based on your logo size */
+            width: 120px; /* Reducido de 150px */
             height: auto;
             object-fit: contain;
         }
@@ -149,8 +157,9 @@ if (isset($_GET['logout'])) {
         }
 
         .nav-icon {
+            width: 24px; /* Reducido de 24px */
+            height: 24px; /* Reducido de 24px */
             margin-right: 12px;
-            font-size: 1.2rem;
         }
 
         .logout-btn {
@@ -293,20 +302,24 @@ if (isset($_GET['logout'])) {
         
         <nav>
             <a href="#" class="nav-item active">
+                <img src="img/estadisticas.png" alt="Estadísticas" class="nav-icon">
                 <span>Estadísticas</span>
             </a>
             <a href="usuarios.php" class="nav-item">
+                <img src="img/usuarios.png" alt="Estadísticas" class="nav-icon">
                 <span>Usuarios</span>
             </a>
         
             <a href="suscripciones.php" class="nav-item">
+                <img src="img/suscripciones.png" alt="Estadísticas" class="nav-icon">
                 <span>Suscripciones</span>
             </a>
         </nav>
         
-        <button class="logout-btn" onclick="location.href='?logout=1'">
-            Cerrar Sesión
-        </button>
+        <a href="?logout=1" class="logout-btn">
+            <img src="img/logout.png" alt="Cerrar Sesión" class="nav-icon">
+            <span>Cerrar Sesión</span>
+        </a>
     </div>
 
     <div class="main-content">

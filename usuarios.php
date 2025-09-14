@@ -26,26 +26,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 $pdo->beginTransaction();
                 
+                // Generar una contraseña por defecto
+                $defaultPassword = 'Aura2024';
+                $hashedPassword = password_hash($defaultPassword, PASSWORD_DEFAULT);
+                
+                // Si no se seleccionó rol, usar 'student' por defecto (ID: 2)
+                $role_id = !empty($_POST['role_id']) ? $_POST['role_id'] : 2;
+                
                 // Insertar en tabla users
-                $stmt = $pdo->prepare("INSERT INTO users (name, lastname, email, subscription_status, subscription_type, subscription_start, created_at) VALUES (?, ?, ?, ?, ?, NOW(), NOW())");
+                $stmt = $pdo->prepare("
+                    INSERT INTO users 
+                    (name, lastname, email, password, role_id, subscription_status, subscription_type, created_at) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+                ");
                 $stmt->execute([
                     $_POST['name'],
                     $_POST['lastname'],
                     $_POST['email'],
+                    $hashedPassword,
+                    $role_id,
                     $_POST['subscription_status'] ?? 'inactive',
                     $_POST['subscription_type'] ?? 'free'
                 ]);
                 
                 $user_id = $pdo->lastInsertId();
                 
-                // Insertar en user_accounts si se seleccionó un rol
-                if (!empty($_POST['role_id'])) {
-                    $stmt = $pdo->prepare("INSERT INTO user_accounts (user_id, role_id) VALUES (?, ?)");
-                    $stmt->execute([$user_id, $_POST['role_id']]);
-                }
-                
                 $pdo->commit();
-                $mensaje = "Usuario creado exitosamente.";
+                $mensaje = "Usuario creado exitosamente. Contraseña por defecto: " . $defaultPassword;
             } catch (Exception $e) {
                 $pdo->rollBack();
                 $mensaje = "Error al crear usuario: " . $e->getMessage();
@@ -56,22 +63,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 $pdo->beginTransaction();
                 
-                // Actualizar tabla users
-                $stmt = $pdo->prepare("UPDATE users SET name=?, lastname=?, email=?, subscription_status=?, subscription_type=? WHERE id=?");
+                // Actualizar tabla users incluyendo role_id (usar el valor que viene del POST)
+                $stmt = $pdo->prepare("UPDATE users SET name=?, lastname=?, email=?, role_id=?, subscription_status=?, subscription_type=? WHERE id=?");
                 $stmt->execute([
                     $_POST['name'],
                     $_POST['lastname'],
                     $_POST['email'],
+                    $_POST['role_id'], // Usar exactamente el valor del formulario
                     $_POST['subscription_status'],
                     $_POST['subscription_type'],
                     $_POST['id']
                 ]);
-                
-                // Actualizar o insertar rol en user_accounts
-                if (!empty($_POST['role_id'])) {
-                    $stmt = $pdo->prepare("REPLACE INTO user_accounts (user_id, role_id) VALUES (?, ?)");
-                    $stmt->execute([$_POST['id'], $_POST['role_id']]);
-                }
                 
                 $pdo->commit();
                 $mensaje = "Usuario actualizado exitosamente.";
@@ -83,21 +85,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
         case 'eliminar':
             try {
-                $pdo->beginTransaction();
-                
-                // Eliminar de user_accounts primero
-                $stmt = $pdo->prepare("DELETE FROM user_accounts WHERE user_id=?");
+                // Simplemente marcar como eliminado en lugar de borrar físicamente
+                $stmt = $pdo->prepare("UPDATE users SET deleted = 1 WHERE id = ?");
                 $stmt->execute([$_POST['id']]);
                 
-                // Eliminar de users
-                $stmt = $pdo->prepare("DELETE FROM users WHERE id=?");
+                // Opcional: cancelar suscripciones activas
+                $stmt = $pdo->prepare("UPDATE subscriptions SET status = 'canceled' WHERE user_id = ? AND status IN ('completed', 'pending')");
                 $stmt->execute([$_POST['id']]);
                 
-                $pdo->commit();
-                $mensaje = "Usuario eliminado exitosamente.";
+                // Redirigir de vuelta a la página en lugar de JSON
+                header('Location: usuarios.php');
+                exit;
+                //echo json_encode(['success' => true, 'message' => 'Usuario eliminado exitosamente']);
+                exit;                
             } catch (Exception $e) {
-                $pdo->rollBack();
-                $mensaje = "Error al eliminar usuario: " . $e->getMessage();
+                echo json_encode(['success' => false, 'message' => 'Error al eliminar usuario: ' . $e->getMessage()]);
+                exit;
             }
             break;
     }
@@ -105,7 +108,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // Obtener todos los usuarios con sus roles (consulta corregida)
 $stmt = $pdo->query("
-    SELECT 
+     SELECT 
         u.id, 
         u.name,
         u.lastname, 
@@ -113,11 +116,11 @@ $stmt = $pdo->query("
         u.role_id,
         u.subscription_status,
         u.subscription_type,
-        u.subscription_start,
         u.created_at,
         r.name as rol_nombre
     FROM users u
     LEFT JOIN roles r ON u.role_id = r.id
+    WHERE u.deleted = 0
     ORDER BY u.created_at DESC
 ");
 $usuarios = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -140,7 +143,7 @@ if (isset($_GET['editar'])) {
             u.role_id
         FROM users u
         LEFT JOIN user_accounts ua ON u.id = ua.user_id
-        WHERE u.id=?
+        WHERE u.id=? AND u.deleted = 0
     ");
     $stmt->execute([$_GET['editar']]);
     $usuario_editar = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -186,7 +189,7 @@ if (isset($_GET['editar'])) {
         }
 
         .logo-img {
-             width: 150px; /* Adjust this value based on your logo size */
+            width: 120px; /* Reducido de 150px */
             height: auto;
             object-fit: contain;
         }
@@ -213,8 +216,9 @@ if (isset($_GET['editar'])) {
         }
 
         .nav-icon {
+            width: 24px; /* Reducido de 24px */
+            height: 24px; /* Reducido de 24px */
             margin-right: 12px;
-            font-size: 1.2rem;
         }
 
         .logout-btn {
@@ -498,20 +502,23 @@ if (isset($_GET['editar'])) {
         
         <nav>
             <a href="dashboard_admin.php" class="nav-item">
+                <img src="img/estadisticas.png" alt="Estadísticas" class="nav-icon">
                 <span>Estadísticas</span>
             </a>
             <a href="usuarios.php" class="nav-item active">
+                <img src="img/usuarios.png" alt="Usuarios" class="nav-icon">
                 <span>Usuarios</span>
             </a>
-        
             <a href="suscripciones.php" class="nav-item">
+                <img src="img/suscripciones.png" alt="Suscripciones" class="nav-icon">
                 <span>Suscripciones</span>
             </a>
         </nav>
         
-        <button class="logout-btn" onclick="location.href='?logout=1'">
-            Cerrar Sesión
-        </button>
+        <a href="?logout=1" class="logout-btn">
+            <img src="img/logout.png" alt="Cerrar Sesión" class="nav-icon">
+            <span>Cerrar Sesión</span>
+        </a>
     </div>
 
 
@@ -595,16 +602,19 @@ if (isset($_GET['editar'])) {
                     <div class="form-group">
                         <label for="role_id">Rol</label>
                         <select id="role_id" name="role_id">
-                            <option value="">Sin rol asignado</option>
                             <?php foreach ($roles as $rol): ?>
                                 <option value="<?php echo $rol['id']; ?>" 
-                                        <?php echo ($usuario_editar && $usuario_editar['role_id'] == $rol['id']) ? 'selected' : ''; ?>>
+                                        <?php 
+                                        // Seleccionar 'student' por defecto si no hay usuario editando
+                                        if (!$usuario_editar && $rol['id'] == 2) echo 'selected';
+                                        // Mantener selección actual si está editando
+                                        if ($usuario_editar && $usuario_editar['role_id'] == $rol['id']) echo 'selected';
+                                        ?>>
                                     <?php echo htmlspecialchars($rol['name']); ?>
                                 </option>
                             <?php endforeach; ?>
                         </select>
                     </div>
-                </div>
                 
                 <div style="margin-top: 1rem;">
                     <button type="submit" class="btn btn-primary">
@@ -702,6 +712,62 @@ if (isset($_GET['editar'])) {
                 setTimeout(() => mensaje.remove(), 500);
             }
         }, 5000);
+
+        // Función para eliminar usuario
+        async function eliminarUsuario(id) {
+            if (confirm('¿Estás seguro de que deseas eliminar este usuario?')) {
+                try {
+                    const formData = new FormData();
+                    formData.append('action', 'eliminar');
+                    formData.append('id', id);
+                    
+                    const response = await fetch('', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        // Mostrar mensaje de éxito
+                        showAlert('Usuario eliminado exitosamente', 'success');
+                        
+                        // IMPORTANTE: Recargar la tabla de usuarios
+                        cargarUsuarios(); // O como se llame tu función para cargar usuarios
+                        
+                        // También recargar las estadísticas si las tienes
+                        cargarEstadisticas(); // Si tienes una función para esto
+                        
+                    } else {
+                        showAlert('Error: ' + result.message, 'error');
+                    }
+                    
+                } catch (error) {
+                    console.error('Error:', error);
+                    showAlert('Error al eliminar usuario', 'error');
+                }
+            }
+        }
+
+        // Función para mostrar alertas (si no la tienes)
+        function showAlert(message, type) {
+            // Crear o buscar el contenedor de alertas
+            let alertContainer = document.getElementById('alertContainer');
+            if (!alertContainer) {
+                alertContainer = document.createElement('div');
+                alertContainer.id = 'alertContainer';
+                document.body.insertBefore(alertContainer, document.body.firstChild);
+            }
+            
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type}`;
+            alert.textContent = message;
+            alertContainer.innerHTML = '';
+            alertContainer.appendChild(alert);
+            
+            // Quitar la alerta después de 5 segundos
+            setTimeout(() => alert.remove(), 5000);
+        }
     </script>
 </body>
 </html>

@@ -25,10 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 $search = $_POST['search'] ?? '';
                 $status_filter = $_POST['status_filter'] ?? '';
-                $plan_filter = $_POST['plan_filter'] ?? '';
-                $page = (int)($_POST['page'] ?? 1);
-                $per_page = 10;
-                $offset = ($page - 1) * $per_page;
+                
                 
                 // Construir query con filtros
                 $where_conditions = [];
@@ -45,27 +42,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $params[] = $status_filter;
                 }
                 
-                if (!empty($plan_filter)) {
-                    $where_conditions[] = "s.plan_name = ?";
-                    $params[] = $plan_filter;
-                }
                 
                 $where_clause = !empty($where_conditions) ? 'WHERE ' . implode(' AND ', $where_conditions) : '';
                 
-                // Contar total de registros
-                $count_sql = "SELECT COUNT(*) FROM subscriptions s 
-                             LEFT JOIN users u ON s.user_id = u.id $where_clause";
-                $count_stmt = $pdo->prepare($count_sql);
-                $count_stmt->execute($params);
-                $total_records = $count_stmt->fetchColumn();
-                
-                // Obtener registros con paginación
+                // Get all records without pagination
                 $sql = "SELECT s.*, u.name, u.lastname, u.email 
                        FROM subscriptions s 
                        LEFT JOIN users u ON s.user_id = u.id 
                        $where_clause 
-                       ORDER BY s.created_at DESC 
-                       LIMIT $per_page OFFSET $offset";
+                       ORDER BY s.created_at DESC";
                 
                 $stmt = $pdo->prepare($sql);
                 $stmt->execute($params);
@@ -73,10 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 echo json_encode([
                     'success' => true,
-                    'data' => $subscriptions,
-                    'total_records' => $total_records,
-                    'total_pages' => ceil($total_records / $per_page),
-                    'current_page' => $page
+                    'data' => $subscriptions
                 ]);
             } catch (Exception $e) {
                 echo json_encode(['success' => false, 'message' => $e->getMessage()]);
@@ -128,13 +110,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'failedSubs' => $failedSubs,
                     'monthlyRevenue' => $monthlyRevenue
                 ];
+                
+                // FALTABA ESTA LÍNEA:
+                echo json_encode(['success' => true, 'data' => $stats]);
+                
             } catch (Exception $e) {
-                $stats = [
-                    'totalSubs' => 0,
-                    'activeSubs' => 0,
-                    'failedSubs' => 0,
-                    'monthlyRevenue' => 0
-                ];
+                echo json_encode(['success' => false, 'message' => $e->getMessage()]);
             }
             break;
             
@@ -157,7 +138,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ]);
                 
                 // Actualizar estado en tabla user
-                $update_user = "UPDATE user SET subscription_status = ?, subscription_type = ?, subscription_start = ?, subscription_end = ? WHERE id = ?";
+                $update_user = "UPDATE users SET subscription_status = ?, subscription_type = ?, subscription_start = ?, subscription_end = ? WHERE id = ?";
                 $pdo->prepare($update_user)->execute([
                     $_POST['status'],
                     $_POST['plan_name'],
@@ -191,7 +172,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ]);
                 
                 // Actualizar estado en tabla user
-                $update_user = "UPDATE user SET subscription_status = ?, subscription_type = ?, subscription_start = ?, subscription_end = ? WHERE id = ?";
+                $update_user = "UPDATE users SET subscription_status = ?, subscription_type = ?, subscription_start = ?, subscription_end = ? WHERE id = ?";
                 $pdo->prepare($update_user)->execute([
                     $_POST['status'],
                     $_POST['plan_name'],
@@ -235,7 +216,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
         case 'get_subscription':
             try {
-                $stmt = $pdo->prepare("SELECT * FROM subscriptions WHERE id = ?");
+                // Hacer JOIN con la tabla users para obtener también el nombre
+                $stmt = $pdo->prepare("
+                    SELECT s.*, u.name, u.lastname, u.email 
+                    FROM subscriptions s 
+                    LEFT JOIN users u ON s.user_id = u.id 
+                    WHERE s.id = ?
+                ");
                 $stmt->execute([$_POST['id']]);
                 $subscription = $stmt->fetch(PDO::FETCH_ASSOC);
                 echo json_encode(['success' => true, 'data' => $subscription]);
@@ -485,9 +472,10 @@ if (isset($_GET['logout'])) {
         .table-container {
             background: white;
             border-radius: 15px;
-            overflow: hidden;
+            overflow: auto; /* Changed from hidden to auto */
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
             margin-bottom: 20px;
+            max-height: 600px; /* Added max-height for scroll */
         }
 
         .table {
@@ -563,6 +551,27 @@ if (isset($_GET['logout'])) {
         .btn-sm:hover {
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .actions {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .btn-small {
+            padding: 0.5rem 1rem;
+            font-size: 0.875rem;
+        }
+
+        .btn-secondary {
+            background: #6b7280;
+            color: white;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            color: white;
         }
 
         .modal {
@@ -707,7 +716,7 @@ if (isset($_GET['logout'])) {
         }
 
         .logo-img {
-            width: 150px;
+            width: 120px;
             height: auto;
             object-fit: contain;
         }
@@ -788,20 +797,24 @@ if (isset($_GET['logout'])) {
         
         <nav>
             <a href="dashboard_admin.php" class="nav-item">
+                <img src="img/estadisticas.png" alt="Estadísticas" class="nav-icon">
                 <span>Estadísticas</span>
             </a>
             <a href="usuarios.php" class="nav-item ">
+                <img src="img/usuarios.png" alt="Estadísticas" class="nav-icon">
                 <span>Usuarios</span>
             </a>
         
             <a href="suscripciones.php" class="nav-item active">
+                <img src="img/suscripciones.png" alt="Estadísticas" class="nav-icon">
                 <span>Suscripciones</span>
             </a>
         </nav>
         
-        <button class="logout-btn" onclick="location.href='?logout=1'">
-            Cerrar Sesión
-        </button>
+        <a href="?logout=1" class="logout-btn">
+            <img src="img/logout.png" alt="Cerrar Sesión" class="nav-icon">
+            <span>Cerrar Sesión</span>
+        </a>
     </div>
 
     <div class="container">
@@ -845,17 +858,6 @@ if (isset($_GET['logout'])) {
                     <option value="canceled">Canceladas</option>
                 </select>
                 
-                <select class="filter-select" id="planFilter">
-                    <option value="">Todos los Planes</option>
-                    <option value="basic">Básico</option>
-                    <option value="premium">Premium</option>
-                    <option value="enterprise">Empresarial</option>
-                    <option value="free">Gratuito</option>
-                </select>
-                
-                <button class="btn btn-success" onclick="openModal('add')">
-                    ➕ Nueva Subscripción
-                </button>
             </div>
         </div>
 
@@ -882,9 +884,10 @@ if (isset($_GET['logout'])) {
             </table>
         </div>
 
+        <!-- Commenting out the pagination section
         <div class="pagination" id="pagination">
             <!-- La paginación se generará dinámicamente -->
-        </div>
+        <!--</div>-->
     </div>
 
     <!-- Modal para agregar/editar subscripciones -->
@@ -905,9 +908,7 @@ if (isset($_GET['logout'])) {
                         <label for="planName">Plan *</label>
                         <select id="planName" required>
                             <option value="free">Gratuito</option>
-                            <option value="basic">Básico</option>
                             <option value="premium">Premium</option>
-                            <option value="enterprise">Empresarial</option>
                         </select>
                     </div>
                     
@@ -928,11 +929,7 @@ if (isset($_GET['logout'])) {
                     <div class="form-group">
                         <label for="paymentMethod">Método de Pago *</label>
                         <select id="paymentMethod" required>
-                            <option value="credit_card">Tarjeta de Crédito</option>
-                            <option value="debit_card">Tarjeta de Débito</option>
-                            <option value="paypal">PayPal</option>
                             <option value="stripe">Stripe</option>
-                            <option value="bank_transfer">Transferencia</option>
                         </select>
                     </div>
                     
@@ -963,8 +960,8 @@ if (isset($_GET['logout'])) {
                 </div>
                 
                 <div style="display: flex; gap: 15px; justify-content: center;">
-                    <button type="submit" class="btn btn-success">💾 Guardar</button>
-                    <button type="button" class="btn btn-danger" onclick="closeModal()">❌ Cancelar</button>
+                    <button type="submit" class="btn btn-success">Guardar</button>
+                    <button type="button" class="btn btn-danger" onclick="closeModal()"> Cancelar</button>
                 </div>
             </form>
         </div>
@@ -987,7 +984,6 @@ if (isset($_GET['logout'])) {
         function setupEventListeners() {
             document.getElementById('searchInput').addEventListener('input', debounce(loadSubscriptions, 500));
             document.getElementById('statusFilter').addEventListener('change', loadSubscriptions);
-            document.getElementById('planFilter').addEventListener('change', loadSubscriptions);
             document.getElementById('subscriptionForm').addEventListener('submit', handleSubmit);
         }
 
@@ -1043,35 +1039,42 @@ if (isset($_GET['logout'])) {
         }
 
         async function loadStats() {
-            const result = await makeRequest('get_stats');
-            if (result.success) {
-                const stats = result.stats;
-                document.getElementById('totalSubs').textContent = stats.total;
-                document.getElementById('activeSubs').textContent = stats.active;
-                document.getElementById('failedSubs').textContent = stats.failed;
-                document.getElementById('monthlyRevenue').textContent = `$${parseFloat(stats.monthly_revenue).toLocaleString()}`;
+            try {
+                const result = await makeRequest('get_stats');
+                if (result.success && result.data) {
+                    const stats = result.data;
+                    
+                    // Buscar los elementos por clase o por el HTML directo
+                    const statCards = document.querySelectorAll('.stat-value');
+                    
+                    if (statCards.length >= 4) {
+                        statCards[0].textContent = stats.totalSubs;
+                        statCards[1].textContent = stats.activeSubs;
+                        statCards[2].textContent = stats.failedSubs;
+                        statCards[3].textContent = `$${parseFloat(stats.monthlyRevenue).toLocaleString()}`;
+                    }
+                    
+                    console.log('Stats actualizadas:', stats);
+                } else {
+                    console.error('Error cargando stats:', result.message);
+                }
+            } catch (error) {
+                console.error('Error en loadStats:', error);
             }
         }
 
-        // Add this code after the last async function
-
-async function loadSubscriptions(page = 1) {
-    currentPage = page;
-    
+        // Modify the loadSubscriptions function
+async function loadSubscriptions() {
     const searchTerm = document.getElementById('searchInput').value;
     const statusFilter = document.getElementById('statusFilter').value;
-    const planFilter = document.getElementById('planFilter').value;
 
     const result = await makeRequest('get_subscriptions', {
         search: searchTerm,
         status_filter: statusFilter,
-        plan_filter: planFilter,
-        page: page
     });
 
     if (result.success) {
         renderSubscriptions(result.data);
-        renderPagination(result.total_pages, result.current_page);
     } else {
         showAlert('Error al cargar subscripciones: ' + result.message, 'error');
     }
@@ -1097,88 +1100,82 @@ function renderSubscriptions(subscriptions) {
             <td><span class="status-badge status-${sub.status.toLowerCase()}">${sub.status}</span></td>
             <td>${formatDate(sub.start_date)}</td>
             <td>${formatDate(sub.end_time)}</td>
-            <td class="action-buttons">
-                <button class="btn btn-sm btn-warning" onclick="openModal('edit', ${sub.id})">Editar</button>
-                <button class="btn btn-sm btn-danger" onclick="deleteSubscription(${sub.id})">Eliminar</button>
+            <td>
+                <div class="actions">
+                    <button class="btn btn-secondary btn-small" onclick="openModal('edit', ${sub.id})">
+                        Editar
+                    </button>
+                    <button class="btn btn-danger btn-small" onclick="deleteSubscription(${sub.id})">
+                        Eliminar
+                    </button>
+                </div>
             </td>
         `;
         tbody.appendChild(tr);
     });
 }
 
-function renderPagination(totalPages, currentPage) {
-    const pagination = document.getElementById('pagination');
-    pagination.innerHTML = '';
+        function openModal(mode, id = null) {
+            editingId = id;
+            const modal = document.getElementById('subscriptionModal');
+            const title = document.getElementById('modalTitle');
+            
+            title.textContent = mode === 'add' ? 'Nueva Subscripción' : 'Editar Subscripción';
+            modal.style.display = 'block';
 
-    // Previous button
-    const prevButton = document.createElement('button');
-    prevButton.textContent = '←';
-    prevButton.disabled = currentPage === 1;
-    prevButton.onclick = () => loadSubscriptions(currentPage - 1);
-    pagination.appendChild(prevButton);
+            if (mode === 'edit' && id) {
+                loadSubscriptionDetails(id);
+            } else {
+                document.getElementById('subscriptionForm').reset();
+            }
+        }
 
-    // Page buttons
-    for (let i = 1; i <= totalPages; i++) {
-        const button = document.createElement('button');
-        button.textContent = i;
-        button.classList.toggle('active', i === currentPage);
-        button.onclick = () => loadSubscriptions(i);
-        pagination.appendChild(button);
-    }
+        async function loadSubscriptionDetails(id) {
+            const result = await makeRequest('get_subscription', { id });
+            if (result.success) {
+                const sub = result.data;
+                
+                // Para el select de usuario, agregar la opción del usuario actual
+                const userSelect = document.getElementById('userId');
+                
+                // Limpiar el select y mantener solo la opción por defecto
+                userSelect.innerHTML = '<option value="">Seleccionar usuario...</option>';
+                
+                // Agregar la opción del usuario actual con su nombre completo
+                const userOption = document.createElement('option');
+                userOption.value = sub.user_id;
+                userOption.textContent = `${sub.name} ${sub.lastname} (${sub.email})`;
+                userSelect.appendChild(userOption);
+                
+                // Seleccionar el usuario actual
+                userSelect.value = sub.user_id;
+                
+                // Resto de campos
+                document.getElementById('planName').value = sub.plan_name;
+                document.getElementById('amount').value = sub.amount;
+                document.getElementById('currency').value = sub.currency;
+                document.getElementById('paymentMethod').value = sub.payment_method;
+                document.getElementById('transactionId').value = sub.transaction_id;
+                document.getElementById('status').value = sub.status;
+                document.getElementById('startDate').value = formatDateForInput(sub.start_date);
+                document.getElementById('endDate').value = formatDateForInput(sub.end_time);
+            }
+        }
 
-    // Next button
-    const nextButton = document.createElement('button');
-    nextButton.textContent = '→';
-    nextButton.disabled = currentPage === totalPages;
-    nextButton.onclick = () => loadSubscriptions(currentPage + 1);
-    pagination.appendChild(nextButton);
-}
-
-function openModal(mode, id = null) {
-    editingId = id;
-    const modal = document.getElementById('subscriptionModal');
-    const title = document.getElementById('modalTitle');
-    
-    title.textContent = mode === 'add' ? 'Nueva Subscripción' : 'Editar Subscripción';
-    modal.style.display = 'block';
-
-    if (mode === 'edit' && id) {
-        loadSubscriptionDetails(id);
-    } else {
-        document.getElementById('subscriptionForm').reset();
-    }
-}
-
-async function loadSubscriptionDetails(id) {
-    const result = await makeRequest('get_subscription', { id });
-    if (result.success) {
-        const sub = result.data;
-        document.getElementById('userId').value = sub.user_id;
-        document.getElementById('planName').value = sub.plan_name;
-        document.getElementById('amount').value = sub.amount;
-        document.getElementById('currency').value = sub.currency;
-        document.getElementById('paymentMethod').value = sub.payment_method;
-        document.getElementById('transactionId').value = sub.transaction_id;
-        document.getElementById('status').value = sub.status;
-        document.getElementById('startDate').value = formatDateForInput(sub.start_date);
-        document.getElementById('endDate').value = formatDateForInput(sub.end_time);
-    }
-}
-
-async function handleSubmit(e) {
-    e.preventDefault();
-    
-    const formData = {
-        plan_name: document.getElementById('planName').value,
-        amount: document.getElementById('amount').value,
-        currency: document.getElementById('currency').value,
-        payment_method: document.getElementById('paymentMethod').value,
-        transaction_id: document.getElementById('transactionId').value,
-        status: document.getElementById('status').value,
-        user_id: document.getElementById('userId').value,
-        start_date: document.getElementById('startDate').value,
-        end_date: document.getElementById('endDate').value
-    };
+        async function handleSubmit(e) {
+            e.preventDefault();
+            
+            const formData = {
+                plan_name: document.getElementById('planName').value,
+                amount: document.getElementById('amount').value,
+                currency: document.getElementById('currency').value,
+                payment_method: document.getElementById('paymentMethod').value,
+                transaction_id: document.getElementById('transactionId').value,
+                status: document.getElementById('status').value,
+                user_id: document.getElementById('userId').value,
+                start_date: document.getElementById('startDate').value,
+                end_date: document.getElementById('endDate').value
+            };
 
     if (editingId) {
         formData.id = editingId;
@@ -1201,7 +1198,7 @@ function handleResponse(result, action) {
     if (result.success) {
         showAlert(`Subscripción ${action} exitosamente`, 'success');
         closeModal();
-        loadSubscriptions(currentPage);
+        loadSubscriptions(); // ← Quitar el parámetro currentPage
         loadStats();
     } else {
         showAlert(`Error: ${result.message}`, 'error');

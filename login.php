@@ -57,8 +57,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['role_name'] = $user['role_name'];
                 
                 // Actualizar último acceso
-                $stmt = $pdo->prepare("UPDATE users SET updated_at = NOW() WHERE id = ?");
-                $stmt->execute([$user['id']]);
+                //$stmt = $pdo->prepare("UPDATE users SET updated_at = NOW() WHERE id = ?");
+                //$stmt->execute([$user['id']]);
                 
                 header('Location: dashboard_admin.php');
                 exit;
