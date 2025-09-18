@@ -3,17 +3,10 @@
 require_once 'auth_check.php';
 
 // Configuración de la base de datos
-$host = 'localhost';
-$dbname = 'aura';
-$username = 'root';
-$password = '';
 
-try {
-    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8", $username, $password);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-} catch(PDOException $e) {
-    die("Error de conexión: " . $e->getMessage());
-}
+require_once __DIR__ . '/Database.php';
+$db = new Database();
+$pdo = $db->getConnection();
 
 $mensaje = '';
 
@@ -96,13 +89,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Redirigir de vuelta a la página en lugar de JSON
                 header('Location: usuarios.php');
                 exit;
-                //echo json_encode(['success' => true, 'message' => 'Usuario eliminado exitosamente']);
-                exit;                
+               
             } catch (Exception $e) {
                 echo json_encode(['success' => false, 'message' => 'Error al eliminar usuario: ' . $e->getMessage()]);
                 exit;
             }
-            break;
     }
 }
 

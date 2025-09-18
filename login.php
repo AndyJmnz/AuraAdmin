@@ -8,17 +8,10 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role_id']) && $_SESSION['rol
 }
 
 // Configuración de la base de datos
-$host = 'localhost';
-$dbname = 'aura';
-$username = 'root';
-$password = '';
 
-try {
-    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8", $username, $password);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-} catch(PDOException $e) {
-    die("Error de conexión: " . $e->getMessage());
-}
+require_once __DIR__ . '/Database.php';
+$db = new Database();
+$pdo = $db->getConnection();
 
 $error = '';
 
