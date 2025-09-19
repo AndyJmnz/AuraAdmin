@@ -1,13 +1,16 @@
 <?php
 session_start();
+error_log("Login.php iniciado");
 
 // Si ya está logueado y es admin, redirigir al dashboard
 if (isset($_SESSION['user_id']) && isset($_SESSION['role_id']) && $_SESSION['role_id'] == 1) {
+    error_log("Usuario ya logueado, redirigiendo al dashboard");
     header('Location: dashboard_admin.php');
     exit;
 }
 
 // Configuración de la base de datos
+error_log("Inicializando conexión a base de datos");
 
 require_once __DIR__ . '/Database.php';
 $db = new Database();
