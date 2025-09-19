@@ -54,7 +54,7 @@ RUN echo "<Directory /var/www/html/>\n    AllowOverride All\n    Require all gra
 EXPOSE 80
 
 # Configurar Apache para usar el puerto de Railway si está definido
-RUN echo 'if [ ! -z "$PORT" ]; then sed -i "s/80/$PORT/g" /etc/apache2/sites-available/000-default.conf /etc/apache2/ports.conf; fi' > /usr/local/bin/start-apache.sh && chmod +x /usr/local/bin/start-apache.sh
+RUN echo '#!/bin/bash\nif [ ! -z "$PORT" ]; then\n  echo "Listen $PORT" > /etc/apache2/ports.conf\n  sed -i "s/:80/:$PORT/g" /etc/apache2/sites-available/000-default.conf\nfi' > /usr/local/bin/start-apache.sh && chmod +x /usr/local/bin/start-apache.sh
 
 # Script para mostrar logs en Railway
 RUN echo '#!/bin/bash\n/usr/local/bin/start-apache.sh\necho "=== Iniciando aplicación ==="\necho "PORT: $PORT"\necho "Variables de entorno disponibles:"\nenv | grep -E "(DB_|MYSQL_|PORT)"\necho "=== Siguiendo logs ==="\ntail -f /var/log/php_errors.log /var/log/apache2/error.log /var/log/apache2/access.log 2>/dev/null &\napache2-foreground' > /usr/local/bin/start-with-logs.sh && chmod +x /usr/local/bin/start-with-logs.sh
