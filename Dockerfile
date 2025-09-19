@@ -4,8 +4,8 @@ FROM php:8.2-apache
 
 # Instalar dependencias del sistema necesarias para Composer y PHP
 RUN apt-get update \
-	&& apt-get install -y git zip unzip \
-	&& docker-php-ext-install pdo pdo_mysql
+	&& apt-get install -y git zip unzip libzip-dev \
+	&& docker-php-ext-install pdo pdo_mysql zip
 
 # Habilitar mod_rewrite de Apache
 RUN a2enmod rewrite
