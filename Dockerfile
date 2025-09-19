@@ -14,6 +14,14 @@ RUN a2enmod rewrite
 RUN rm -rf /var/www/html/*
 COPY . /var/www/html/
 
+# Crear .env si no existe (para evitar errores)
+RUN if [ ! -f /var/www/html/.env ]; then \
+    echo "DB_HOST=localhost" > /var/www/html/.env && \
+    echo "DB_NAME=aura" >> /var/www/html/.env && \
+    echo "DB_USER=root" >> /var/www/html/.env && \
+    echo "DB_PASS=" >> /var/www/html/.env; \
+    fi
+
 # Instalar Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
