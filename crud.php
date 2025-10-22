@@ -12,12 +12,12 @@ $mensaje = '';
 // Procesar acciones CRUD
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $accion = $_POST['accion'] ?? '';
-    
+
     switch ($accion) {
         case 'crear':
             try {
                 $pdo->beginTransaction();
-                
+
                 // Insertar en tabla users
                 $stmt = $pdo->prepare("INSERT INTO users (name, email, email_verified_at, password, created_at, updated_at) VALUES (?, ?, NOW(), ?, NOW(), NOW())");
                 $stmt->execute([
@@ -25,15 +25,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $_POST['email'],
                     password_hash($_POST['password'], PASSWORD_DEFAULT)
                 ]);
-                
+
                 $user_id = $pdo->lastInsertId();
-                
+
                 // Insertar en user_accounts si se seleccionó un rol
                 if (!empty($_POST['role_id'])) {
                     $stmt = $pdo->prepare("INSERT INTO user_accounts (user_id, role_id, created_at, updated_at) VALUES (?, ?, NOW(), NOW())");
                     $stmt->execute([$user_id, $_POST['role_id']]);
                 }
-                
+
                 $pdo->commit();
                 $mensaje = "Usuario creado exitosamente.";
             } catch (Exception $e) {
@@ -41,11 +41,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $mensaje = "Error al crear usuario: " . $e->getMessage();
             }
             break;
-            
+
         case 'editar':
             try {
                 $pdo->beginTransaction();
-                
+
                 // Actualizar tabla users
                 if (!empty($_POST['password'])) {
                     $stmt = $pdo->prepare("UPDATE users SET name=?, email=?, password=?, updated_at=NOW() WHERE id=?");
@@ -63,12 +63,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $_POST['id']
                     ]);
                 }
-                
+
                 // Actualizar o insertar rol en user_accounts
                 if (!empty($_POST['role_id'])) {
                     $stmt = $pdo->prepare("SELECT id FROM user_accounts WHERE user_id=?");
                     $stmt->execute([$_POST['id']]);
-                    
+
                     if ($stmt->fetch()) {
                         $stmt = $pdo->prepare("UPDATE user_accounts SET role_id=?, updated_at=NOW() WHERE user_id=?");
                         $stmt->execute([$_POST['role_id'], $_POST['id']]);
@@ -77,7 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $stmt->execute([$_POST['id'], $_POST['role_id']]);
                     }
                 }
-                
+
                 $pdo->commit();
                 $mensaje = "Usuario actualizado exitosamente.";
             } catch (Exception $e) {
@@ -85,19 +85,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $mensaje = "Error al actualizar usuario: " . $e->getMessage();
             }
             break;
-            
+
         case 'eliminar':
             try {
                 $pdo->beginTransaction();
-                
-                // Eliminar de user_accounts primero
-                $stmt = $pdo->prepare("DELETE FROM user_accounts WHERE user_id=?");
-                $stmt->execute([$_POST['id']]);
-                
+
+                // // Eliminar de user_accounts primero
+                // $stmt = $pdo->prepare("DELETE FROM user_accounts WHERE user_id=?");
+                // $stmt->execute([$_POST['id']]);
+
                 // Eliminar de users
-                $stmt = $pdo->prepare("DELETE FROM users WHERE id=?");
+                $stmt = $pdo->prepare("UPDATE users SET deleted=1 WHERE id=?");
                 $stmt->execute([$_POST['id']]);
-                
+
                 $pdo->commit();
                 $mensaje = "Usuario eliminado exitosamente.";
             } catch (Exception $e) {
@@ -149,6 +149,7 @@ if (isset($_GET['editar'])) {
 
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -174,7 +175,7 @@ if (isset($_GET['editar'])) {
             color: white;
             position: fixed;
             height: 100vh;
-            box-shadow: 4px 0 20px rgba(0,0,0,0.1);
+            box-shadow: 4px 0 20px rgba(0, 0, 0, 0.1);
         }
 
         .logo {
@@ -186,7 +187,7 @@ if (isset($_GET['editar'])) {
         }
 
         .logo-icon {
-            background: rgba(255,255,255,0.2);
+            background: rgba(255, 255, 255, 0.2);
             border-radius: 12px;
             padding: 10px;
             margin-right: 15px;
@@ -206,12 +207,12 @@ if (isset($_GET['editar'])) {
         }
 
         .nav-item:hover {
-            background: rgba(255,255,255,0.1);
+            background: rgba(255, 255, 255, 0.1);
             transform: translateX(5px);
         }
 
         .nav-item.active {
-            background: rgba(255,255,255,0.15);
+            background: rgba(255, 255, 255, 0.15);
         }
 
         .nav-icon {
@@ -224,7 +225,7 @@ if (isset($_GET['editar'])) {
             bottom: 2rem;
             left: 2rem;
             right: 2rem;
-            background: rgba(255,255,255,0.1);
+            background: rgba(255, 255, 255, 0.1);
             border: none;
             color: white;
             padding: 1rem;
@@ -234,7 +235,7 @@ if (isset($_GET['editar'])) {
         }
 
         .logout-btn:hover {
-            background: rgba(255,255,255,0.2);
+            background: rgba(255, 255, 255, 0.2);
         }
 
         .main-content {
@@ -244,12 +245,12 @@ if (isset($_GET['editar'])) {
         }
 
         .header {
-            background: rgba(255,255,255,0.9);
+            background: rgba(255, 255, 255, 0.9);
             backdrop-filter: blur(10px);
             border-radius: 20px;
             padding: 2rem;
             margin-bottom: 2rem;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
         }
 
         .header h1 {
@@ -259,11 +260,11 @@ if (isset($_GET['editar'])) {
         }
 
         .content-card {
-            background: rgba(255,255,255,0.9);
+            background: rgba(255, 255, 255, 0.9);
             backdrop-filter: blur(10px);
             border-radius: 20px;
             padding: 2rem;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
             margin-bottom: 2rem;
         }
 
@@ -356,7 +357,8 @@ if (isset($_GET['editar'])) {
             border-collapse: collapse;
         }
 
-        th, td {
+        th,
+        td {
             padding: 1rem;
             text-align: left;
             border-bottom: 1px solid #e5e7eb;
@@ -420,15 +422,15 @@ if (isset($_GET['editar'])) {
                 width: 80px;
                 padding: 1rem;
             }
-            
+
             .main-content {
                 margin-left: 80px;
             }
-            
+
             .nav-item span {
                 display: none;
             }
-            
+
             .form-grid {
                 grid-template-columns: 1fr;
             }
@@ -443,13 +445,14 @@ if (isset($_GET['editar'])) {
         }
     </style>
 </head>
+
 <body>
     <div class="sidebar">
         <div class="logo">
             <div class="logo-icon">Au</div>
             <span>ra</span>
         </div>
-        
+
         <nav>
             <a href="index.php" class="nav-item">
                 <span class="nav-icon">📊</span>
