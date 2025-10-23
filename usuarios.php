@@ -38,7 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $_POST['email'],
                     $hashedPassword,
                     $role_id,
-                    $_POST['subscription_status'] ?? 'inactive',
+                    $_POST['subscription_status'] ?? 'none', // Cambiado de 'inactive' a 'none'
                     $_POST['subscription_type'] ?? 'free'
                 ]);
                 
@@ -56,13 +56,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 $pdo->beginTransaction();
                 
-                // Actualizar tabla users incluyendo role_id (usar el valor que viene del POST)
+                // Actualizar tabla users incluyendo role_id
                 $stmt = $pdo->prepare("UPDATE users SET name=?, lastname=?, email=?, role_id=?, subscription_status=?, subscription_type=? WHERE id=?");
                 $stmt->execute([
                     $_POST['name'],
                     $_POST['lastname'],
                     $_POST['email'],
-                    $_POST['role_id'], // Usar exactamente el valor del formulario
+                    $_POST['role_id'],
                     $_POST['subscription_status'],
                     $_POST['subscription_type'],
                     $_POST['id']
@@ -577,8 +577,10 @@ if (isset($_GET['editar'])) {
                     <div class="form-group">
                         <label for="subscription_status">Estado de Suscripción</label>
                         <select id="subscription_status" name="subscription_status">
+                            <option value="none" <?php echo ($usuario_editar && $usuario_editar['subscription_status'] == 'none') ? 'selected' : ''; ?>>Ninguna</option>
                             <option value="active" <?php echo ($usuario_editar && $usuario_editar['subscription_status'] == 'active') ? 'selected' : ''; ?>>Activa</option>
-                            <option value="inactive" <?php echo ($usuario_editar && $usuario_editar['subscription_status'] == 'inactive') ? 'selected' : ''; ?>>Inactiva</option>
+                            <option value="cancelled" <?php echo ($usuario_editar && $usuario_editar['subscription_status'] == 'cancelled') ? 'selected' : ''; ?>>Cancelada</option>
+                            <option value="expired" <?php echo ($usuario_editar && $usuario_editar['subscription_status'] == 'expired') ? 'selected' : ''; ?>>Expirada</option>
                         </select>
                     </div>
                     
